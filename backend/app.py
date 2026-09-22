@@ -1,8 +1,13 @@
-from flask import Flask, jsonify, request, session, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from config import get_db
 from mysql.connector import Error
+from flask_jwt_extended import (
+    JWTManager, create_access_token, create_refresh_token,
+    jwt_required, get_jwt_identity, get_jwt
+)
+from datetime import timedelta
 
 import os
 import uuid
@@ -12,12 +17,70 @@ from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
-app.secret_key = "ecommerce-secret-key"
+# JWT configuration
+app.config["JWT_SECRET_KEY"] = "task16-jwt-secret-key-change-this-in-production"
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=15)
+app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
+jwt = JWTManager(app)
+
+# =========================================
+# JWT TOKEN BLACKLIST / BLOCKLIST
+# =========================================
+
+@jwt.token_in_blocklist_loader
+def check_if_token_revoked(jwt_header, jwt_payload):
+
+    jti = jwt_payload["jti"]
+
+    db = None
+    cursor = None
+
+    try:
+        db = get_db()
+        cursor = db.cursor()
+
+        cursor.execute(
+            """
+            SELECT id
+            FROM revoked_tokens
+            WHERE jti = %s
+            LIMIT 1
+            """,
+            (jti,)
+        )
+
+        revoked_token = cursor.fetchone()
+
+        return revoked_token is not None
+
+    except Error as e:
+        print("Token Blacklist Check Error:", e)
+
+        # Fail closed:
+        # if blacklist verification cannot be completed,
+        # reject the token rather than trusting it.
+        return True
+
+    finally:
+        if cursor:
+            cursor.close()
+
+        if db:
+            db.close()
+
+
+@jwt.revoked_token_loader
+def revoked_token_callback(jwt_header, jwt_payload):
+
+    return jsonify({
+        "success": False,
+        "message": "This token has been revoked. Please login again."
+    }), 401
 
 
 CORS(
     app,
-    supports_credentials=True,
+    supports_credentials=False,
     origins=["http://localhost:5173"]
 )
 
@@ -296,13 +359,18 @@ def login():
 
 
         # -----------------------------------------
-        # 6. Create login session
+        # 6. Create JWT tokens
         # -----------------------------------------
+        access_token = create_access_token(
+            identity=str(user["id"]),
+            additional_claims={
+                "role": user["role"],
+                "name": user["name"],
+                "email": user["email"]
+            }
+        )
+        refresh_token = create_refresh_token(identity=str(user["id"]))
 
-        session["user_id"] = user["id"]
-        session["name"] = user["name"]
-        session["email"] = user["email"]
-        session["role"] = user["role"]
 
 
         # -----------------------------------------
@@ -312,6 +380,8 @@ def login():
         return jsonify({
             "success": True,
             "message": "Login successful",
+            "access_token": access_token,
+            "refresh_token": refresh_token,
             "user": {
                 "id": user["id"],
                 "name": user["name"],
@@ -340,44 +410,209 @@ def login():
             db.close()
             
 # ------------------------------------------------
-# CURRENT LOGGED-IN USER
+# CURRENT LOGGED-IN USER - JWT
 # ------------------------------------------------
 
 @app.route("/api/me", methods=["GET"])
+@jwt_required()
 def get_current_user():
+    user_id = get_jwt_identity()
+    claims = get_jwt()
 
-    # Check whether user is logged in
-    if "user_id" not in session:
-
-        return jsonify({
-            "success": False,
-            "message": "Not logged in"
-        }), 401
-
-    # Return logged-in user information
     return jsonify({
         "success": True,
         "user": {
-            "id": session["user_id"],
-            "name": session["name"],
-            "email": session["email"],
-            "role": session["role"]
+            "id": int(user_id),
+            "name": claims.get("name"),
+            "email": claims.get("email"),
+            "role": claims.get("role")
         }
-    }), 200            
+    }), 200
 
-# =========================================
-# 5. LOGOUT API
-# =========================================
 
-@app.route("/api/logout", methods=["GET"])
+# ------------------------------------------------
+# REFRESH ACCESS TOKEN
+# ------------------------------------------------
+
+@app.route("/api/refresh", methods=["POST"])
+@jwt_required(refresh=True)
+def refresh():
+    db = None
+    cursor = None
+    try:
+        user_id = get_jwt_identity()
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id, name, email, role FROM users WHERE id = %s",
+            (user_id,)
+        )
+        user = cursor.fetchone()
+
+        if not user:
+            return jsonify({"success": False, "message": "User not found"}), 404
+
+        new_access_token = create_access_token(
+            identity=str(user["id"]),
+            additional_claims={
+                "role": user["role"],
+                "name": user["name"],
+                "email": user["email"]
+            }
+        )
+        return jsonify({
+            "success": True,
+            "access_token": new_access_token
+        }), 200
+    except Error as e:
+        print("Refresh Error:", e)
+        return jsonify({
+            "success": False,
+            "message": "Unable to refresh token"
+        }), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if db:
+            db.close()
+
+
+# ------------------------------------------------
+# LOGOUT
+# ------------------------------------------------
+
+# ------------------------------------------------
+# LOGOUT - REVOKE ACCESS TOKEN
+# ------------------------------------------------
+
+@app.route("/api/logout", methods=["POST"])
+@jwt_required()
 def logout():
 
-    session.clear()
+    db = None
+    cursor = None
 
-    return jsonify({
-        "success": True,
-        "message": "Logout successful"
-    }), 200
+    try:
+        user_id = get_jwt_identity()
+
+        token = get_jwt()
+
+        jti = token["jti"]
+        token_type = token["type"]
+
+        db = get_db()
+        cursor = db.cursor()
+
+        cursor.execute(
+            """
+            INSERT IGNORE INTO revoked_tokens
+            (jti, token_type, user_id)
+            VALUES (%s, %s, %s)
+            """,
+            (
+                jti,
+                token_type,
+                int(user_id)
+            )
+        )
+
+        db.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Logout successful. Access token revoked."
+        }), 200
+
+    except Error as e:
+
+        if db:
+            db.rollback()
+
+        print("Logout Error:", e)
+
+        return jsonify({
+            "success": False,
+            "message": "Unable to logout"
+        }), 500
+
+    finally:
+
+        if cursor:
+            cursor.close()
+
+        if db:
+            db.close()
+
+# ------------------------------------------------
+# LOGOUT - REVOKE REFRESH TOKEN
+# ------------------------------------------------
+
+@app.route("/api/logout/refresh", methods=["POST"])
+@jwt_required(refresh=True)
+def logout_refresh():
+
+    db = None
+    cursor = None
+
+    try:
+
+        # Get logged-in user's ID
+        user_id = get_jwt_identity()
+
+        # Get information from refresh JWT
+        token = get_jwt()
+
+        # Every JWT has a unique JTI
+        jti = token["jti"]
+
+        # This will be "refresh"
+        token_type = token["type"]
+
+        # Connect to MySQL
+        db = get_db()
+        cursor = db.cursor()
+
+        # Save refresh token JTI in blacklist table
+        cursor.execute(
+            """
+            INSERT IGNORE INTO revoked_tokens
+            (jti, token_type, user_id)
+            VALUES (%s, %s, %s)
+            """,
+            (
+                jti,
+                token_type,
+                int(user_id)
+            )
+        )
+
+        db.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Refresh token revoked successfully"
+        }), 200
+
+    except Error as e:
+
+        if db:
+            db.rollback()
+
+        print("Refresh Token Logout Error:", e)
+
+        return jsonify({
+            "success": False,
+            "message": "Unable to revoke refresh token"
+        }), 500
+
+    finally:
+
+        if cursor:
+            cursor.close()
+
+        if db:
+            db.close()
+
 
 
 # =========================================
@@ -617,21 +852,11 @@ def get_product(product_id):
 # =========================================
 
 @app.route("/api/products", methods=["POST"])
+@jwt_required()
 def add_product():
 
-    # -------------------------------
-    # 1. Check login
-    # -------------------------------
-    if "user_id" not in session:
-        return jsonify({
-            "success": False,
-            "message": "Login required"
-        }), 401
-
-    # -------------------------------
-    # 2. Check admin role
-    # -------------------------------
-    if session.get("role") != "admin":
+    claims = get_jwt()
+    if claims.get("role") != "admin":
         return jsonify({
             "success": False,
             "message": "Admin access required"
@@ -737,23 +962,11 @@ def add_product():
 # =========================================
 
 @app.route("/api/products/<int:product_id>", methods=["PUT"])
+@jwt_required()
 def update_product(product_id):
 
-    # --------------------------------
-    # 1. Check whether user logged in
-    # --------------------------------
-    if "user_id" not in session:
-
-        return jsonify({
-            "success": False,
-            "message": "Login required"
-        }), 401
-
-    # --------------------------------
-    # 2. Check admin role
-    # --------------------------------
-    if session.get("role") != "admin":
-
+    claims = get_jwt()
+    if claims.get("role") != "admin":
         return jsonify({
             "success": False,
             "message": "Admin access required"
@@ -894,29 +1107,15 @@ def update_product(product_id):
 # =========================================
 
 @app.route("/api/products/<int:product_id>", methods=["DELETE"])
+@jwt_required()
 def delete_product(product_id):
 
-    # --------------------------------
-    # 1. Check login
-    # --------------------------------
-    if "user_id" not in session:
-
-        return jsonify({
-            "success": False,
-            "message": "Login required"
-        }), 401
-
-
-    # --------------------------------
-    # 2. Check admin role
-    # --------------------------------
-    if session.get("role") != "admin":
-
+    claims = get_jwt()
+    if claims.get("role") != "admin":
         return jsonify({
             "success": False,
             "message": "Admin access required"
         }), 403
-
 
     db = None
     cursor = None
@@ -994,17 +1193,10 @@ def delete_product(product_id):
 # =========================================
 
 @app.route("/api/orders", methods=["POST"])
+@jwt_required()
 def place_order():
 
-    # --------------------------------
-    # 1. Check login
-    # --------------------------------
-    if "user_id" not in session:
-
-        return jsonify({
-            "success": False,
-            "message": "Login required"
-        }), 401
+    user_id = get_jwt_identity()
 
     db = None
     cursor = None
@@ -1157,7 +1349,7 @@ def place_order():
             VALUES (%s, %s, %s)
             """,
             (
-                session["user_id"],
+                user_id,
                 total_amount,
                 address
             )
@@ -1247,17 +1439,10 @@ def place_order():
 # =========================================
 
 @app.route("/api/orders/my", methods=["GET"])
+@jwt_required()
 def my_orders():
 
-    # --------------------------------
-    # 1. Check login
-    # --------------------------------
-    if "user_id" not in session:
-
-        return jsonify({
-            "success": False,
-            "message": "Login required"
-        }), 401
+    user_id = get_jwt_identity()
 
     db = None
     cursor = None
@@ -1286,7 +1471,7 @@ def my_orders():
             WHERE user_id = %s
             ORDER BY ordered_at DESC
             """,
-            (session["user_id"],)
+            (user_id,)
         )
 
         orders = cursor.fetchall()
@@ -1344,23 +1529,11 @@ def my_orders():
 # =========================================
 
 @app.route("/api/orders", methods=["GET"])
+@jwt_required()
 def get_all_orders():
 
-    # --------------------------------
-    # 1. Check login
-    # --------------------------------
-    if "user_id" not in session:
-
-        return jsonify({
-            "success": False,
-            "message": "Login required"
-        }), 401
-
-    # --------------------------------
-    # 2. Check admin role
-    # --------------------------------
-    if session.get("role") != "admin":
-
+    claims = get_jwt()
+    if claims.get("role") != "admin":
         return jsonify({
             "success": False,
             "message": "Admin access required"
@@ -1458,23 +1631,11 @@ def get_all_orders():
 # =========================================
 
 @app.route("/api/orders/<int:order_id>/status", methods=["PUT"])
+@jwt_required()
 def update_order_status(order_id):
 
-    # --------------------------------
-    # 1. Check login
-    # --------------------------------
-    if "user_id" not in session:
-
-        return jsonify({
-            "success": False,
-            "message": "Login required"
-        }), 401
-
-    # --------------------------------
-    # 2. Check admin role
-    # --------------------------------
-    if session.get("role") != "admin":
-
+    claims = get_jwt()
+    if claims.get("role") != "admin":
         return jsonify({
             "success": False,
             "message": "Admin access required"
@@ -1597,16 +1758,12 @@ def update_order_status(order_id):
 # =========================================
 
 @app.route("/api/upload/product-image", methods=["POST"])
+@jwt_required()
 def upload_product_image():
 
-    # Only a logged-in administrator may upload product photos.
-    if "user_id" not in session:
-        return jsonify({
-            "success": False,
-            "message": "Login required"
-        }), 401
 
-    if session.get("role") != "admin":
+    claims = get_jwt()
+    if claims.get("role") != "admin":
         return jsonify({
             "success": False,
             "message": "Admin access required"

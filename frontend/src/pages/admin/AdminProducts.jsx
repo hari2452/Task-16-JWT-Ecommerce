@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useState,
 } from "react";
 
@@ -11,6 +12,7 @@ import api from "../../api";
 
 
 function AdminProducts() {
+
   const [products, setProducts] =
     useState([]);
 
@@ -26,25 +28,30 @@ function AdminProducts() {
   const [deletingId, setDeletingId] =
     useState(null);
 
+  const [search, setSearch] =
+    useState("");
+
 
   // =====================================
   // LOAD PRODUCTS
   // =====================================
 
   const loadProducts = async () => {
+
     try {
+
       setLoading(true);
       setError("");
 
-      const response = await api.get(
-        "/api/products"
-      );
+      const response =
+        await api.get("/api/products");
 
       setProducts(
         response.data.data || []
       );
 
     } catch (err) {
+
       console.log(
         "Admin Products Error:",
         err
@@ -52,17 +59,21 @@ function AdminProducts() {
 
       setError(
         err.response?.data?.message ||
+        err.response?.data?.msg ||
         "Unable to load products"
       );
 
     } finally {
+
       setLoading(false);
     }
   };
 
 
   useEffect(() => {
+
     loadProducts();
+
   }, []);
 
 
@@ -74,6 +85,7 @@ function AdminProducts() {
     id,
     name
   ) => {
+
     const confirmDelete =
       window.confirm(
         `Are you sure you want to delete "${name}"?`
@@ -86,7 +98,9 @@ function AdminProducts() {
 
 
     try {
+
       setDeletingId(id);
+
       setError("");
       setMessage("");
 
@@ -95,9 +109,6 @@ function AdminProducts() {
         `/api/products/${id}`
       );
 
-
-      // Remove deleted product
-      // immediately from React state.
 
       setProducts(
         (currentProducts) =>
@@ -118,6 +129,7 @@ function AdminProducts() {
       }, 3000);
 
     } catch (err) {
+
       console.log(
         "Delete Error:",
         err
@@ -126,20 +138,23 @@ function AdminProducts() {
 
       setError(
         err.response?.data?.message ||
+        err.response?.data?.msg ||
         "Unable to delete product"
       );
 
     } finally {
+
       setDeletingId(null);
     }
   };
 
 
   // =====================================
-  // HANDLE BROKEN IMAGE
+  // IMAGE ERROR
   // =====================================
 
   const handleImageError = (event) => {
+
     const image =
       event.currentTarget;
 
@@ -151,6 +166,7 @@ function AdminProducts() {
 
 
     if (fallback) {
+
       fallback.style.display =
         "flex";
     }
@@ -158,15 +174,108 @@ function AdminProducts() {
 
 
   // =====================================
+  // PRODUCT STATISTICS
+  // =====================================
+
+  const totalProducts =
+    products.length;
+
+
+  const inStockCount =
+    products.filter(
+      (product) =>
+        Number(product.stock) >= 5
+    ).length;
+
+
+  const lowStockCount =
+    products.filter(
+      (product) =>
+        Number(product.stock) > 0 &&
+        Number(product.stock) < 5
+    ).length;
+
+
+  const outOfStockCount =
+    products.filter(
+      (product) =>
+        Number(product.stock) === 0
+    ).length;
+
+
+  // =====================================
+  // SEARCH
+  // =====================================
+
+  const filteredProducts =
+    useMemo(() => {
+
+      const searchValue =
+        search.trim().toLowerCase();
+
+
+      if (!searchValue) {
+        return products;
+      }
+
+
+      return products.filter(
+        (product) => {
+
+          const name =
+            product.name
+              ?.toLowerCase() || "";
+
+          const category =
+            product.category_name
+              ?.toLowerCase() || "";
+
+          const description =
+            product.description
+              ?.toLowerCase() || "";
+
+
+          return (
+            name.includes(searchValue) ||
+            category.includes(searchValue) ||
+            description.includes(searchValue)
+          );
+        }
+      );
+
+    }, [products, search]);
+
+
+  // =====================================
   // LOADING
   // =====================================
 
   if (loading) {
-    return (
-      <div className="admin-page">
 
-        <div className="admin-products-status">
-          <p>Loading products...</p>
+    return (
+
+      <div className="peach-admin-page">
+
+        <div className="admin-bg-shape admin-shape-one" />
+        <div className="admin-bg-shape admin-shape-two" />
+
+
+        <div className="peach-admin-loading">
+
+          <div className="admin-loader-ring">
+            <span />
+          </div>
+
+
+          <h2>
+            Loading Products
+          </h2>
+
+
+          <p>
+            Preparing your ShopZone catalogue...
+          </p>
+
         </div>
 
       </div>
@@ -174,14 +283,34 @@ function AdminProducts() {
   }
 
 
+  // =====================================
+  // PAGE
+  // =====================================
+
   return (
-    <div className="admin-page">
 
-      {/* PAGE HEADER */}
+    <div className="peach-admin-page">
 
-      <div className="admin-page-header">
 
-        <div>
+      {/* BACKGROUND */}
+
+      <div className="admin-bg-shape admin-shape-one" />
+      <div className="admin-bg-shape admin-shape-two" />
+
+
+      {/* =================================
+          HEADER
+      ================================= */}
+
+      <header className="peach-admin-header">
+
+
+        <div className="admin-header-content">
+
+          <span className="admin-page-label">
+            SHOPZONE ADMIN
+          </span>
+
 
           <h1>
             Product Management
@@ -189,349 +318,725 @@ function AdminProducts() {
 
 
           <p>
-            Add, edit and manage store products
+            Manage products, prices,
+            stock and your store catalogue.
           </p>
 
         </div>
 
 
-        <div className="admin-header-actions">
+        <div className="peach-admin-header-actions">
+
 
           <button
             type="button"
-            className="admin-refresh-button"
+            className="peach-admin-refresh"
             onClick={loadProducts}
           >
+
+            <span>
+              ↻
+            </span>
+
             Refresh
+
           </button>
 
 
           <Link
             to="/admin/products/add"
-            className="admin-add-button"
+            className="peach-admin-add"
           >
-            + Add New Product
+
+            <span>
+              +
+            </span>
+
+            Add New Product
+
           </Link>
 
         </div>
 
-      </div>
+      </header>
 
 
-      {/* ERROR MESSAGE */}
+      {/* =================================
+          MESSAGES
+      ================================= */}
 
       {error && (
-        <div className="error-message">
-          {error}
+
+        <div className="peach-admin-message admin-message-error">
+
+          <span>
+            !
+          </span>
+
+
+          <div>
+
+            <strong>
+              Something went wrong
+            </strong>
+
+            <p>
+              {error}
+            </p>
+
+          </div>
+
         </div>
       )}
 
-
-      {/* SUCCESS MESSAGE */}
 
       {message && (
-        <div className="success-message">
-          {message}
+
+        <div className="peach-admin-message admin-message-success">
+
+          <span>
+            ✓
+          </span>
+
+
+          <div>
+
+            <strong>
+              Success
+            </strong>
+
+            <p>
+              {message}
+            </p>
+
+          </div>
+
         </div>
       )}
 
 
-      {/* PRODUCT COUNT */}
+      {/* =================================
+          STATISTICS
+      ================================= */}
 
-      <div className="admin-product-summary">
-
-        <p>
-          Total Products:{" "}
-
-          <strong>
-            {products.length}
-          </strong>
-        </p>
+      <section className="peach-admin-stats">
 
 
-        <p>
-          Low Stock:{" "}
+        {/* TOTAL */}
 
-          <strong>
-            {
-              products.filter(
-                (product) =>
-                  Number(product.stock) > 0 &&
-                  Number(product.stock) < 5
-              ).length
-            }
-          </strong>
-        </p>
+        <div className="peach-admin-stat-card">
+
+          <div className="admin-stat-icon">
+            ◇
+          </div>
 
 
-        <p>
-          Out of Stock:{" "}
+          <div>
 
-          <strong>
-            {
-              products.filter(
-                (product) =>
-                  Number(product.stock) === 0
-              ).length
-            }
-          </strong>
-        </p>
+            <span>
+              TOTAL PRODUCTS
+            </span>
 
-      </div>
+            <strong>
+              {totalProducts}
+            </strong>
 
+            <p>
+              Store catalogue
+            </p>
 
-      {/* EMPTY PRODUCT LIST */}
-
-      {products.length === 0 ? (
-
-        <div className="admin-products-empty">
-
-          <span>📦</span>
-
-          <h2>
-            No products available
-          </h2>
-
-          <p>
-            Add your first product to the store.
-          </p>
-
-
-          <Link
-            to="/admin/products/add"
-            className="admin-add-button"
-          >
-            + Add Product
-          </Link>
+          </div>
 
         </div>
 
-      ) : (
 
-        /* PRODUCT TABLE */
+        {/* IN STOCK */}
 
-        <div className="admin-table-wrapper">
+        <div className="peach-admin-stat-card">
 
-          <table className="admin-table">
-
-            <thead>
-
-              <tr>
-
-                <th>ID</th>
-
-                <th>Photo</th>
-
-                <th>Product</th>
-
-                <th>Category</th>
-
-                <th>Price</th>
-
-                <th>Stock</th>
-
-                <th>Status</th>
-
-                <th>Actions</th>
-
-              </tr>
-
-            </thead>
+          <div className="admin-stat-icon admin-stat-green">
+            ✓
+          </div>
 
 
-            <tbody>
+          <div>
 
-              {products.map(
-                (product) => {
+            <span>
+              IN STOCK
+            </span>
 
-                  const stock =
-                    Number(product.stock);
+            <strong>
+              {inStockCount}
+            </strong>
+
+            <p>
+              Ready for orders
+            </p>
+
+          </div>
+
+        </div>
 
 
-                  return (
-                    <tr key={product.id}>
+        {/* LOW STOCK */}
 
-                      {/* PRODUCT ID */}
+        <div className="peach-admin-stat-card">
 
-                      <td>
-                        {product.id}
-                      </td>
+          <div className="admin-stat-icon admin-stat-orange">
+            !
+          </div>
 
 
-                      {/* PRODUCT PHOTO */}
+          <div>
 
-                      <td>
+            <span>
+              LOW STOCK
+            </span>
 
-                        <div className="admin-product-image">
+            <strong>
+              {lowStockCount}
+            </strong>
 
-                          {product.image_url && (
+            <p>
+              Needs attention
+            </p>
 
-                            <img
-                              src={
-                                product.image_url
-                              }
-                              alt={
-                                product.name
-                              }
-                              loading="lazy"
-                              onError={
-                                handleImageError
-                              }
-                            />
+          </div>
+
+        </div>
+
+
+        {/* OUT OF STOCK */}
+
+        <div className="peach-admin-stat-card">
+
+          <div className="admin-stat-icon admin-stat-red">
+            ×
+          </div>
+
+
+          <div>
+
+            <span>
+              OUT OF STOCK
+            </span>
+
+            <strong>
+              {outOfStockCount}
+            </strong>
+
+            <p>
+              Unavailable items
+            </p>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      {/* =================================
+          PRODUCT MANAGEMENT CARD
+      ================================= */}
+
+      <section className="peach-admin-products-card">
+
+
+        {/* TOOLBAR */}
+
+        <div className="peach-admin-toolbar">
+
+
+          <div>
+
+            <span className="admin-section-number">
+              01
+            </span>
+
+
+            <div>
+
+              <span className="admin-section-label">
+                CATALOGUE
+              </span>
+
+              <h2>
+                Your Products
+              </h2>
+
+              <p>
+                Manage your ShopZone inventory.
+              </p>
+
+            </div>
+
+          </div>
+
+
+          <div className="admin-toolbar-right">
+
+
+            {/* SEARCH */}
+
+            <div className="peach-admin-search">
+
+              <span>
+                ⌕
+              </span>
+
+
+              <input
+                type="text"
+                value={search}
+                onChange={(e) =>
+                  setSearch(
+                    e.target.value
+                  )
+                }
+                placeholder="Search products..."
+              />
+
+
+              {search && (
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSearch("")
+                  }
+                  aria-label="Clear search"
+                >
+                  ×
+                </button>
+
+              )}
+
+            </div>
+
+
+            <span className="admin-result-count">
+
+              {filteredProducts.length}
+
+              {" "}
+
+              product
+              {filteredProducts.length !== 1
+                ? "s"
+                : ""}
+
+            </span>
+
+          </div>
+
+        </div>
+
+
+        {/* =================================
+            EMPTY PRODUCTS
+        ================================= */}
+
+        {products.length === 0 ? (
+
+          <div className="peach-admin-empty">
+
+            <div className="admin-empty-icon">
+              📦
+            </div>
+
+
+            <h2>
+              Your catalogue is empty.
+            </h2>
+
+
+            <p>
+              Add your first product to
+              start building your ShopZone store.
+            </p>
+
+
+            <Link
+              to="/admin/products/add"
+              className="peach-admin-add"
+            >
+              + Add First Product
+            </Link>
+
+          </div>
+
+        ) : filteredProducts.length === 0 ? (
+
+          <div className="peach-admin-empty">
+
+            <div className="admin-empty-icon">
+              ⌕
+            </div>
+
+
+            <h2>
+              No products found.
+            </h2>
+
+
+            <p>
+              No products match
+              "{search}".
+            </p>
+
+
+            <button
+              type="button"
+              className="admin-clear-search"
+              onClick={() =>
+                setSearch("")
+              }
+            >
+              Clear Search
+            </button>
+
+          </div>
+
+        ) : (
+
+          /* =================================
+             PRODUCT TABLE
+          ================================= */
+
+          <div className="peach-admin-table-wrapper">
+
+
+            <table className="peach-admin-table">
+
+
+              <thead>
+
+                <tr>
+
+                  <th>
+                    ID
+                  </th>
+
+                  <th>
+                    Product
+                  </th>
+
+                  <th>
+                    Category
+                  </th>
+
+                  <th>
+                    Price
+                  </th>
+
+                  <th>
+                    Stock
+                  </th>
+
+                  <th>
+                    Status
+                  </th>
+
+                  <th>
+                    Actions
+                  </th>
+
+                </tr>
+
+              </thead>
+
+
+              <tbody>
+
+                {filteredProducts.map(
+                  (product) => {
+
+                    const stock =
+                      Number(product.stock);
+
+                    const price =
+                      Number(product.price);
+
+
+                    return (
+
+                      <tr key={product.id}>
+
+
+                        {/* ID */}
+
+                        <td>
+
+                          <span className="admin-product-id">
+                            #{product.id}
+                          </span>
+
+                        </td>
+
+
+                        {/* PRODUCT */}
+
+                        <td>
+
+                          <div className="peach-admin-product">
+
+
+                            {/* IMAGE */}
+
+                            <div className="peach-admin-product-image">
+
+                              {product.image_url && (
+
+                                <img
+                                  src={product.image_url}
+                                  alt={product.name}
+                                  loading="lazy"
+                                  onError={
+                                    handleImageError
+                                  }
+                                />
+
+                              )}
+
+
+                              <div
+                                className="peach-admin-image-fallback"
+                                style={{
+                                  display:
+                                    product.image_url
+                                      ? "none"
+                                      : "flex",
+                                }}
+                              >
+                                🛍️
+                              </div>
+
+                            </div>
+
+
+                            {/* INFORMATION */}
+
+                            <div className="peach-admin-product-info">
+
+                              <strong>
+                                {product.name}
+                              </strong>
+
+
+                              <p>
+                                {product.description ||
+                                  "No description available"}
+                              </p>
+
+                            </div>
+
+                          </div>
+
+                        </td>
+
+
+                        {/* CATEGORY */}
+
+                        <td>
+
+                          <span className="peach-admin-category">
+
+                            {product.category_name ||
+                              "Uncategorized"}
+
+                          </span>
+
+                        </td>
+
+
+                        {/* PRICE */}
+
+                        <td>
+
+                          <strong className="peach-admin-price">
+
+                            ₹
+                            {price.toFixed(2)}
+
+                          </strong>
+
+                        </td>
+
+
+                        {/* STOCK */}
+
+                        <td>
+
+                          <div className="peach-admin-stock">
+
+                            <strong>
+                              {stock}
+                            </strong>
+
+                            <span>
+                              units
+                            </span>
+
+                          </div>
+
+                        </td>
+
+
+                        {/* STATUS */}
+
+                        <td>
+
+                          {stock === 0 ? (
+
+                            <span className="peach-stock-badge peach-stock-out">
+
+                              <i />
+
+                              Out of Stock
+
+                            </span>
+
+                          ) : stock < 5 ? (
+
+                            <span className="peach-stock-badge peach-stock-low">
+
+                              <i />
+
+                              Low Stock
+
+                            </span>
+
+                          ) : (
+
+                            <span className="peach-stock-badge peach-stock-in">
+
+                              <i />
+
+                              In Stock
+
+                            </span>
 
                           )}
 
+                        </td>
 
-                          <div
-                            className="admin-image-fallback"
 
-                            style={{
-                              display:
-                                product.image_url
-                                  ? "none"
-                                  : "flex",
-                            }}
-                          >
-                            🛍️
+                        {/* ACTIONS */}
+
+                        <td>
+
+                          <div className="peach-admin-actions">
+
+
+                            <Link
+                              to={
+                                `/admin/products/edit/${product.id}`
+                              }
+                              className="peach-edit-button"
+                            >
+
+                              <span>
+                                ✎
+                              </span>
+
+                              Edit
+
+                            </Link>
+
+
+                            <button
+                              type="button"
+                              className="peach-delete-button"
+                              disabled={
+                                deletingId ===
+                                product.id
+                              }
+                              onClick={() =>
+                                handleDelete(
+                                  product.id,
+                                  product.name
+                                )
+                              }
+                            >
+
+                              {deletingId ===
+                              product.id ? (
+
+                                <>
+                                  <span className="admin-delete-loader" />
+
+                                  Deleting
+                                </>
+
+                              ) : (
+
+                                <>
+                                  <span>
+                                    ×
+                                  </span>
+
+                                  Delete
+                                </>
+
+                              )}
+
+                            </button>
+
                           </div>
 
-                        </div>
+                        </td>
 
-                      </td>
+                      </tr>
+                    );
+                  }
+                )}
 
+              </tbody>
 
-                      {/* PRODUCT INFORMATION */}
+            </table>
 
-                      <td>
-
-                        <strong className="admin-product-name">
-                          {product.name}
-                        </strong>
-
-
-                        <p className="admin-product-description">
-
-                          {product.description ||
-                            "No description"}
-
-                        </p>
-
-                      </td>
+          </div>
+        )}
 
 
-                      {/* CATEGORY */}
+        {/* =================================
+            FOOTER
+        ================================= */}
 
-                      <td>
+        {products.length > 0 && (
 
-                        {product.category_name ||
-                          "Uncategorized"}
+          <div className="peach-admin-table-footer">
 
-                      </td>
+            <p>
 
+              Showing{" "}
 
-                      {/* PRICE */}
+              <strong>
+                {filteredProducts.length}
+              </strong>
 
-                      <td className="admin-product-price">
+              {" "}of{" "}
 
-                        ₹
-                        {Number(
-                          product.price
-                        ).toFixed(2)}
+              <strong>
+                {products.length}
+              </strong>
 
-                      </td>
+              {" "}products
 
-
-                      {/* STOCK */}
-
-                      <td>
-                        {stock}
-                      </td>
+            </p>
 
 
-                      {/* STOCK STATUS */}
+            <Link
+              to="/admin/products/add"
+            >
+              + Add another product
+            </Link>
 
-                      <td>
+          </div>
+        )}
 
-                        {stock === 0 ? (
-
-                          <span className="stock-badge out-stock">
-                            Out of Stock
-                          </span>
-
-                        ) : stock < 5 ? (
-
-                          <span className="stock-badge low-stock">
-                            Low Stock
-                          </span>
-
-                        ) : (
-
-                          <span className="stock-badge in-stock">
-                            In Stock
-                          </span>
-
-                        )}
-
-                      </td>
-
-
-                      {/* ACTION BUTTONS */}
-
-                      <td>
-
-                        <div className="admin-actions">
-
-                          <Link
-                            to={
-                              `/admin/products/edit/${product.id}`
-                            }
-                            className="edit-button"
-                          >
-                            Edit
-                          </Link>
-
-
-                          <button
-                            type="button"
-                            className="delete-button"
-
-                            disabled={
-                              deletingId ===
-                              product.id
-                            }
-
-                            onClick={() =>
-                              handleDelete(
-                                product.id,
-                                product.name
-                              )
-                            }
-                          >
-
-                            {deletingId ===
-                            product.id
-                              ? "Deleting..."
-                              : "Delete"
-                            }
-
-                          </button>
-
-                        </div>
-
-                      </td>
-
-                    </tr>
-                  );
-                }
-              )}
-
-            </tbody>
-
-          </table>
-
-        </div>
-
-      )}
+      </section>
 
     </div>
   );

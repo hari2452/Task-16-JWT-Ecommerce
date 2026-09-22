@@ -1,29 +1,26 @@
-import {
-  useState,
-} from "react";
-
-import {
-  Link,
-  useNavigate,
-} from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 import api from "../api";
 
 
 function Register() {
+
   const navigate = useNavigate();
 
 
-  const [formData, setFormData] =
-    useState({
-      name: "",
-      email: "",
-      password: "",
-      confirmPassword: "",
-    });
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
 
 
   const [showPassword, setShowPassword] =
+    useState(false);
+
+  const [showConfirmPassword, setShowConfirmPassword] =
     useState(false);
 
   const [loading, setLoading] =
@@ -41,18 +38,14 @@ function Register() {
   // =====================================
 
   const handleChange = (event) => {
-    const {
-      name,
-      value,
-    } = event.target;
 
+    const { name, value } =
+      event.target;
 
-    setFormData(
-      (currentData) => ({
-        ...currentData,
-        [name]: value,
-      })
-    );
+    setFormData((currentData) => ({
+      ...currentData,
+      [name]: value,
+    }));
   };
 
 
@@ -61,6 +54,7 @@ function Register() {
   // =====================================
 
   const handleSubmit = async (event) => {
+
     event.preventDefault();
 
     setError("");
@@ -76,7 +70,10 @@ function Register() {
         .toLowerCase();
 
 
+    // NAME VALIDATION
+
     if (!name) {
+
       setError(
         "Name is required"
       );
@@ -85,7 +82,10 @@ function Register() {
     }
 
 
+    // EMAIL VALIDATION
+
     if (!email) {
+
       setError(
         "Email is required"
       );
@@ -94,9 +94,10 @@ function Register() {
     }
 
 
-    if (
-      formData.password.length < 6
-    ) {
+    // PASSWORD VALIDATION
+
+    if (formData.password.length < 6) {
+
       setError(
         "Password must contain at least 6 characters"
       );
@@ -105,10 +106,13 @@ function Register() {
     }
 
 
+    // CONFIRM PASSWORD
+
     if (
       formData.password !==
       formData.confirmPassword
     ) {
+
       setError(
         "Passwords do not match"
       );
@@ -118,6 +122,7 @@ function Register() {
 
 
     try {
+
       setLoading(true);
 
 
@@ -126,8 +131,7 @@ function Register() {
         {
           name,
           email,
-          password:
-            formData.password,
+          password: formData.password,
         }
       );
 
@@ -146,16 +150,19 @@ function Register() {
 
 
       setTimeout(() => {
+
         navigate(
           "/login",
           {
             replace: true,
           }
         );
+
       }, 1500);
 
 
     } catch (err) {
+
       console.log(
         "Registration Error:",
         err
@@ -164,210 +171,577 @@ function Register() {
 
       setError(
         err.response?.data?.message ||
+        err.response?.data?.msg ||
         "Unable to register. Please try again."
       );
 
 
     } finally {
+
       setLoading(false);
     }
   };
 
 
   return (
-    <div className="auth-page">
 
-      <div className="auth-card">
-
-        <div className="auth-brand">
-          <span>🛍️</span>
-
-          <p>
-            Join ShopZone
-          </p>
-        </div>
+    <div className="peach-auth-page register-auth-page">
 
 
-        <h1>
-          Create Account
-        </h1>
+      {/* BACKGROUND DECORATIONS */}
+
+      <div className="auth-decoration auth-decoration-one" />
+
+      <div className="auth-decoration auth-decoration-two" />
+
+      <div className="auth-decoration auth-decoration-three" />
 
 
-        <p>
-          Register to start shopping and
-          track your orders.
-        </p>
+
+      {/* =====================================
+          REGISTER CONTAINER
+      ===================================== */}
+
+      <div className="peach-auth-container register-auth-container">
 
 
-        {error && (
-          <div className="error-message">
-            {error}
-          </div>
-        )}
+        {/* =====================================
+            LEFT PANEL
+        ===================================== */}
+
+        <div className="peach-auth-showcase register-showcase">
 
 
-        {success && (
-          <div className="success-message">
-            {success}
-          </div>
-        )}
+          <div className="auth-showcase-shine" />
 
 
-        <form onSubmit={handleSubmit}>
+          {/* BRAND */}
 
-          {/* NAME */}
+          <Link
+            to="/"
+            className="auth-brand"
+          >
 
-          <div className="form-group">
-
-            <label htmlFor="register-name">
-              Full Name
-            </label>
-
-
-            <input
-              id="register-name"
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="Enter your full name"
-              autoComplete="name"
-              disabled={loading}
-              required
-            />
-
-          </div>
+            <div className="auth-brand-logo">
+              S
+            </div>
 
 
-          {/* EMAIL */}
+            <div>
 
-          <div className="form-group">
+              <strong>
+                ShopZone
+              </strong>
 
-            <label htmlFor="register-email">
-              Email Address
-            </label>
+              <span>
+                Beautiful Shopping
+              </span>
 
+            </div>
 
-            <input
-              id="register-email"
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="Enter your email address"
-              autoComplete="email"
-              disabled={loading}
-              required
-            />
-
-          </div>
+          </Link>
 
 
-          {/* PASSWORD */}
 
-          <div className="form-group">
+          {/* MAIN CONTENT */}
 
-            <label htmlFor="register-password">
-              Password
-            </label>
+          <div className="auth-showcase-content">
 
 
-            <div className="password-input-wrapper">
-
-              <input
-                id="register-password"
-                type={
-                  showPassword
-                    ? "text"
-                    : "password"
-                }
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="Minimum 6 characters"
-                autoComplete="new-password"
-                disabled={loading}
-                minLength="6"
-                required
-              />
+            <span className="auth-small-title">
+              ✦ JOIN SHOPZONE
+            </span>
 
 
-              <button
-                type="button"
-                className="password-toggle"
-                onClick={() =>
-                  setShowPassword(
-                    (current) =>
-                      !current
-                  )
-                }
-              >
-                {showPassword
-                  ? "Hide"
-                  : "Show"}
-              </button>
+            <h1>
+              Your shopping
+              <span>
+                {" "}journey starts here.
+              </span>
+            </h1>
+
+
+            <p>
+              Create your ShopZone account
+              and discover products you'll love,
+              manage your cart and track your
+              orders easily.
+            </p>
+
+
+
+            {/* FEATURES */}
+
+            <div className="auth-feature-list">
+
+
+              <div className="auth-feature">
+
+                <div>
+                  ♡
+                </div>
+
+                <span>
+
+                  <strong>
+                    Discover Products
+                  </strong>
+
+                  Explore our latest collection
+
+                </span>
+
+              </div>
+
+
+
+              <div className="auth-feature">
+
+                <div>
+                  🛍
+                </div>
+
+                <span>
+
+                  <strong>
+                    Easy Shopping
+                  </strong>
+
+                  Add products and checkout easily
+
+                </span>
+
+              </div>
+
+
+
+              <div className="auth-feature">
+
+                <div>
+                  ✓
+                </div>
+
+                <span>
+
+                  <strong>
+                    Track Your Orders
+                  </strong>
+
+                  Keep your purchases organized
+
+                </span>
+
+              </div>
 
             </div>
 
           </div>
 
 
-          {/* CONFIRM PASSWORD */}
 
-          <div className="form-group">
+          {/* FLOATING CARD */}
 
-            <label htmlFor="confirm-password">
-              Confirm Password
-            </label>
+          <div className="auth-floating-card">
+
+            <span>
+              ✨
+            </span>
 
 
-            <input
-              id="confirm-password"
-              type={
-                showPassword
-                  ? "text"
-                  : "password"
-              }
-              name="confirmPassword"
-              value={
-                formData.confirmPassword
-              }
-              onChange={handleChange}
-              placeholder="Enter password again"
-              autoComplete="new-password"
-              disabled={loading}
-              required
-            />
+            <div>
+
+              <small>
+                NEW MEMBER
+              </small>
+
+              <strong>
+                Welcome to ShopZone
+              </strong>
+
+            </div>
 
           </div>
 
-
-          {/* SUBMIT */}
-
-          <button
-            type="submit"
-            className="auth-button"
-            disabled={loading}
-          >
-
-            {loading
-              ? "Creating Account..."
-              : "Create Account"}
-
-          </button>
-
-        </form>
+        </div>
 
 
-        <div className="auth-footer">
 
-          <p>
-            Already have an account?{" "}
+        {/* =====================================
+            RIGHT REGISTER FORM
+        ===================================== */}
 
-            <Link to="/login">
-              Login
+        <div className="peach-auth-form-side register-form-side">
+
+
+          <div className="peach-auth-form register-form">
+
+
+            {/* HEADING */}
+
+            <div className="auth-form-heading">
+
+
+              <span className="auth-form-small">
+                CREATE ACCOUNT
+              </span>
+
+
+              <h2>
+                Join us today.
+              </h2>
+
+
+              <p>
+                Enter your details below to
+                create your ShopZone account.
+              </p>
+
+            </div>
+
+
+
+            {/* ERROR */}
+
+            {error && (
+
+              <div className="peach-auth-error">
+
+                <span>
+                  !
+                </span>
+
+
+                <div>
+
+                  <strong>
+                    Registration unsuccessful
+                  </strong>
+
+                  <p>
+                    {error}
+                  </p>
+
+                </div>
+
+              </div>
+
+            )}
+
+
+
+            {/* SUCCESS */}
+
+            {success && (
+
+              <div className="peach-auth-success">
+
+                <span>
+                  ✓
+                </span>
+
+
+                <div>
+
+                  <strong>
+                    Account created!
+                  </strong>
+
+                  <p>
+                    {success}
+                  </p>
+
+                </div>
+
+              </div>
+
+            )}
+
+
+
+            {/* =====================================
+                FORM
+            ===================================== */}
+
+            <form
+              onSubmit={handleSubmit}
+              className="peach-login-form register-form-fields"
+            >
+
+
+              {/* NAME */}
+
+              <div className="peach-form-group">
+
+                <label htmlFor="register-name">
+                  Full Name
+                </label>
+
+
+                <div className="peach-input-wrapper">
+
+                  <span className="peach-input-icon">
+                    ♙
+                  </span>
+
+
+                  <input
+                    id="register-name"
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="Enter your full name"
+                    autoComplete="name"
+                    disabled={loading}
+                    required
+                  />
+
+                </div>
+
+              </div>
+
+
+
+              {/* EMAIL */}
+
+              <div className="peach-form-group">
+
+                <label htmlFor="register-email">
+                  Email Address
+                </label>
+
+
+                <div className="peach-input-wrapper">
+
+                  <span className="peach-input-icon">
+                    @
+                  </span>
+
+
+                  <input
+                    id="register-email"
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    disabled={loading}
+                    required
+                  />
+
+                </div>
+
+              </div>
+
+
+
+              {/* PASSWORD */}
+
+              <div className="peach-form-group">
+
+
+                <div className="password-label-row">
+
+                  <label htmlFor="register-password">
+                    Password
+                  </label>
+
+
+                  <span className="secure-text">
+                    Minimum 6 characters
+                  </span>
+
+                </div>
+
+
+                <div className="peach-input-wrapper">
+
+                  <span className="peach-input-icon">
+                    ◇
+                  </span>
+
+
+                  <input
+                    id="register-password"
+                    type={
+                      showPassword
+                        ? "text"
+                        : "password"
+                    }
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    placeholder="Create your password"
+                    autoComplete="new-password"
+                    disabled={loading}
+                    minLength="6"
+                    required
+                  />
+
+
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() =>
+                      setShowPassword(
+                        (current) => !current
+                      )
+                    }
+                    disabled={loading}
+                    aria-label={
+                      showPassword
+                        ? "Hide password"
+                        : "Show password"
+                    }
+                  >
+
+                    {showPassword
+                      ? "Hide"
+                      : "Show"
+                    }
+
+                  </button>
+
+                </div>
+
+              </div>
+
+
+
+              {/* CONFIRM PASSWORD */}
+
+              <div className="peach-form-group">
+
+                <label htmlFor="confirm-password">
+                  Confirm Password
+                </label>
+
+
+                <div className="peach-input-wrapper">
+
+                  <span className="peach-input-icon">
+                    ✓
+                  </span>
+
+
+                  <input
+                    id="confirm-password"
+                    type={
+                      showConfirmPassword
+                        ? "text"
+                        : "password"
+                    }
+                    name="confirmPassword"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    placeholder="Enter your password again"
+                    autoComplete="new-password"
+                    disabled={loading}
+                    required
+                  />
+
+
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() =>
+                      setShowConfirmPassword(
+                        (current) => !current
+                      )
+                    }
+                    disabled={loading}
+                    aria-label={
+                      showConfirmPassword
+                        ? "Hide confirm password"
+                        : "Show confirm password"
+                    }
+                  >
+
+                    {showConfirmPassword
+                      ? "Hide"
+                      : "Show"
+                    }
+
+                  </button>
+
+                </div>
+
+              </div>
+
+
+
+              {/* REGISTER BUTTON */}
+
+              <button
+                type="submit"
+                className="peach-auth-button register-submit-button"
+                disabled={loading}
+              >
+
+                {loading ? (
+
+                  <>
+
+                    <span className="auth-button-loader" />
+
+                    Creating Account...
+
+                  </>
+
+                ) : (
+
+                  <>
+
+                    Create Account
+
+                    <span className="auth-button-arrow">
+                      →
+                    </span>
+
+                  </>
+
+                )}
+
+              </button>
+
+            </form>
+
+
+
+            {/* DIVIDER */}
+
+            <div className="auth-divider">
+
+              <span />
+
+              <p>
+                Already a member?
+              </p>
+
+              <span />
+
+            </div>
+
+
+
+            {/* LOGIN */}
+
+            <Link
+              to="/login"
+              className="create-account-button"
+            >
+              Sign In to Your Account
             </Link>
-          </p>
+
+
+
+            <p className="auth-security-note">
+              🔒 Your account information is
+              protected with secure authentication.
+            </p>
+
+          </div>
 
         </div>
 

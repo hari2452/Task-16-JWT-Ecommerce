@@ -1,96 +1,223 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
+import TokenExpiryCountdown from "./TokenExpiryCountdown";
 
 function Navbar() {
   const navigate = useNavigate();
 
   const { user, logout } = useAuth();
-
   const { cartCount } = useCart();
 
-  const handleLogout = async () => {
-    try {
-      await logout();
 
-      navigate("/login");
-    } catch (error) {
-      console.log("Logout Error:", error);
-    }
+  // =====================================================
+  // LOGOUT
+  // Wait until backend revokes both JWT tokens,
+  // then redirect to login.
+  // =====================================================
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login");
   };
 
+
   return (
-    <nav className="navbar">
+    <header className="peach-navbar">
 
-      <div className="navbar-left">
+      <div className="peach-nav-container">
 
-        <Link to="/" className="logo">
-          ShopZone
+        {/* =================================================
+            LOGO
+        ================================================= */}
+        <Link to="/" className="peach-logo">
+
+          <div className="peach-logo-icon">
+            S
+          </div>
+
+          <div className="peach-logo-text">
+            <strong>ShopZone</strong>
+            <span>Simply Beautiful Shopping</span>
+          </div>
+
         </Link>
 
-      </div>
+
+        {/* =================================================
+            NAVIGATION
+        ================================================= */}
+        <nav className="peach-nav-links">
+
+          <NavLink
+            to="/"
+            className={({ isActive }) =>
+              isActive
+                ? "peach-nav-link active"
+                : "peach-nav-link"
+            }
+          >
+            Home
+          </NavLink>
 
 
-      <div className="navbar-links">
-
-        <Link to="/">
-          Home
-        </Link>
-
-        <Link to="/cart">
-          Cart ({cartCount})
-        </Link>
-
-
-        {user && (
-          <Link to="/orders">
-            My Orders
-          </Link>
-        )}
+          {user && (
+            <NavLink
+              to="/orders"
+              className={({ isActive }) =>
+                isActive
+                  ? "peach-nav-link active"
+                  : "peach-nav-link"
+              }
+            >
+              My Orders
+            </NavLink>
+          )}
 
 
-        {user?.role === "admin" && (
-          <>
-            <Link to="/admin/products">
-              Admin Products
-            </Link>
+          {/* ADMIN LINKS */}
+          {user?.role === "admin" && (
+            <>
 
-            <Link to="/admin/orders">
-              Admin Orders
-            </Link>
-          </>
-        )}
+              <NavLink
+                to="/admin/products"
+                className={({ isActive }) =>
+                  isActive
+                    ? "peach-nav-link active"
+                    : "peach-nav-link"
+                }
+              >
+                Products
+              </NavLink>
 
-      </div>
+
+              <NavLink
+                to="/admin/orders"
+                className={({ isActive }) =>
+                  isActive
+                    ? "peach-nav-link active"
+                    : "peach-nav-link"
+                }
+              >
+                Orders
+              </NavLink>
+
+            </>
+          )}
+
+        </nav>
 
 
-      <div className="navbar-right">
+        {/* =================================================
+            RIGHT SIDE
+        ================================================= */}
+        <div className="peach-nav-right">
 
-        {!user ? (
-          <>
-            <Link to="/login">
-              Login
-            </Link>
 
-            <Link to="/register">
-              Register
-            </Link>
-          </>
-        ) : (
-          <>
-            <span>
-              Hi, {user.name}
+          {/* =================================================
+              CART
+          ================================================= */}
+          <Link
+            to="/cart"
+            className="peach-cart-button"
+            aria-label={`Cart with ${cartCount} items`}
+          >
+
+            <span className="cart-icon">
+              🛍️
             </span>
 
-            <button onClick={handleLogout}>
-              Logout
-            </button>
-          </>
-        )}
+            <span className="cart-text">
+              Cart
+            </span>
+
+            {cartCount > 0 && (
+              <span className="cart-badge">
+                {cartCount}
+              </span>
+            )}
+
+          </Link>
+
+
+          {/* =================================================
+              LOGGED IN USER
+          ================================================= */}
+          {user ? (
+
+            <div className="peach-user-section">
+
+
+              {/* USER AVATAR */}
+              <div className="peach-user-avatar">
+
+                {user.name
+                  ?.charAt(0)
+                  .toUpperCase()}
+
+              </div>
+
+
+              {/* USER NAME */}
+              <div className="peach-user-info">
+
+                <span>
+                  Welcome
+                </span>
+
+                <strong>
+                  {user.name}
+                </strong>
+
+              </div>
+
+
+              {/* =============================================
+                  JWT TOKEN EXPIRY COUNTDOWN
+              ============================================= */}
+              <TokenExpiryCountdown />
+
+
+              {/* LOGOUT */}
+              <button
+                className="peach-logout-button"
+                onClick={handleLogout}
+                title="Logout"
+              >
+                Logout
+              </button>
+
+            </div>
+
+          ) : (
+
+            /* ===============================================
+               NOT LOGGED IN
+            =============================================== */
+            <div className="peach-auth-links">
+
+              <Link
+                to="/login"
+                className="peach-login-link"
+              >
+                Login
+              </Link>
+
+              <Link
+                to="/register"
+                className="peach-register-link"
+              >
+                Join Now
+              </Link>
+
+            </div>
+
+          )}
+
+        </div>
 
       </div>
 
-    </nav>
+    </header>
   );
 }
 
