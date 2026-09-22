@@ -1,142 +1,809 @@
-ShopZone — Full-Stack E-Commerce Platform
+# ShopZone — Full-Stack E-Commerce Platform
+## Task 16 — JWT Authentication Upgrade
 
-ShopZone is a full-stack e-commerce application built with React, Flask and MySQL. Customers can browse products, search and filter the catalogue, maintain a shopping cart, place orders and track order status. Administrators can manage products, upload product images, monitor stock, view customer orders and update delivery status.
+ShopZone is a full-stack e-commerce application built with React, Flask, and MySQL.
 
-Technologies Used
+Customers can register, log in, browse products, search and filter products, maintain a shopping cart, place orders, and track order status.
 
-Frontend
+Administrators can manage products, upload product images, monitor stock, view customer orders, and update delivery status.
 
-React with Vite
+In Task 16, the original Flask session authentication was upgraded to JWT authentication using access tokens and refresh tokens.
 
-React Router
+---
 
-React Context API
+# Technologies Used
 
-Axios
+## Frontend
 
-CSS3 responsive design
+- React with Vite
+- React Router
+- React Context API
+- Axios
+- CSS3
+- Responsive Design
+- Browser localStorage
+- JWT Authentication
 
-Browser localStorage for cart persistence
+## Backend
 
-Backend
+- Python
+- Flask
+- Flask-CORS
+- Flask-Bcrypt
+- Flask-JWT-Extended
+- MySQL Connector
 
-Python
-
-Flask
-
-Flask-CORS
-
-Flask-Bcrypt
-
-MySQL Connector
-
-Flask session authentication
-
-Database
+## Database
 
 MySQL
 
-Tables: users, categories, products, orders, and order_items
+Main tables:
 
-Main Features
+- users
+- categories
+- products
+- orders
+- order_items
+- revoked_tokens
 
-Customer Features
+---
 
-Registration, login and logout
+# Task 16 — JWT Authentication
 
-Session-based authentication
+The application now uses JWT authentication instead of Flask session authentication.
 
-Browse products with images
+Two JWT tokens are generated during login:
 
-Product search, category filter and price sorting
+### Access Token
 
-Product detail page with quantity selection
+The access token is used to access protected API routes.
 
-Add, update and remove cart items
+Example:
 
-Cart persistence after browser refresh
+```text
+Authorization: Bearer ACCESS_TOKEN
+```
 
-Protected checkout page
+The access token expires after:
 
-Place an order with a delivery address
+```text
+15 minutes
+```
 
-View previous orders and current status
+### Refresh Token
 
-Responsive desktop, tablet and mobile interface
+The refresh token is used to generate a new access token when the current access token expires.
 
-Administrator Features
+The refresh token expires after:
 
-Role-protected administrator pages
+```text
+7 days
+```
 
-View all products with image thumbnails
+---
 
-Add, edit and delete products
+# JWT Authentication Flow
 
-Upload PNG, JPG, JPEG and WEBP product images
+```text
+User Login
+    ↓
+Flask verifies email and password
+    ↓
+Access Token + Refresh Token generated
+    ↓
+React stores both tokens in localStorage
+    ↓
+Axios adds Access Token to protected requests
+    ↓
+Flask verifies JWT
+    ↓
+Protected API response returned
+```
 
-Validate image type and 5 MB maximum size
+---
 
-Product image preview
+# Login Flow
 
-In Stock, Low Stock and Out of Stock badges
+The user enters:
 
-View all customer orders
-
-View order totals and customer delivery information
-
-Filter orders by status
-
-Update orders to Pending, Confirmed, Shipped, Delivered or Cancelled
-
-Demo Login Credentials
-
-Administrator
-
-Field
-
-Value
-
-Email/User ID
-
-admin@shop.com
-
+```text
+Email
 Password
+```
 
-admin123
+React sends:
 
-Role
+```text
+POST /api/login
+```
 
-admin
+If the credentials are correct, Flask returns:
 
-The administrator account is created by running backend/seed.py.
+```json
+{
+  "access_token": "ACCESS_TOKEN",
+  "refresh_token": "REFRESH_TOKEN",
+  "user": {
+    "id": 1,
+    "name": "User",
+    "email": "user@example.com",
+    "role": "customer"
+  }
+}
+```
 
-Customer
+React stores the tokens:
 
-Create a customer using the Register page. A suggested testing account is:
+```javascript
+localStorage.setItem(
+  "access_token",
+  access_token
+);
 
-Field
+localStorage.setItem(
+  "refresh_token",
+  refresh_token
+);
+```
 
-Value
+---
 
-Email/User ID
+# Axios Request Interceptor
 
-customer@test.com
+Axios automatically attaches the access token to protected requests.
 
-Password
+Example:
 
-customer123
+```javascript
+api.interceptors.request.use(
+  (config) => {
 
-Role
+    const accessToken =
+      localStorage.getItem(
+        "access_token"
+      );
 
+    if (accessToken) {
+
+      config.headers.Authorization =
+        `Bearer ${accessToken}`;
+
+    }
+
+    return config;
+  }
+);
+```
+
+The backend receives:
+
+```text
+Authorization: Bearer ACCESS_TOKEN
+```
+
+This means individual React components do not need to manually attach the JWT for every protected request.
+
+---
+
+# Automatic Token Refresh
+
+The access token has a short expiry time.
+
+When it expires:
+
+```text
+Protected API Request
+        ↓
+Access Token Expired
+        ↓
+Backend returns 401
+        ↓
+Axios Response Interceptor
+        ↓
+POST /api/refresh
+        ↓
+Refresh Token sent
+        ↓
+New Access Token generated
+        ↓
+New Access Token saved
+        ↓
+Original request retried
+        ↓
+Request succeeds
+```
+
+The user does not need to log in again every time the short-lived access token expires.
+
+---
+
+# Refresh Endpoint
+
+Endpoint:
+
+```text
+POST /api/refresh
+```
+
+The refresh token is sent as:
+
+```text
+Authorization: Bearer REFRESH_TOKEN
+```
+
+The backend validates the refresh token and generates a new access token.
+
+---
+
+# Restore Login After Browser Refresh
+
+When React starts, `AuthContext` checks whether JWT tokens are available.
+
+It then calls:
+
+```text
+GET /api/me
+```
+
+If the access token is valid, the backend returns the authenticated user.
+
+If the access token has expired, the Axios interceptor can use the refresh token to obtain a new access token.
+
+Therefore, refreshing the browser does not immediately log the user out while valid authentication tokens remain available.
+
+---
+
+# JWT Token Blacklisting
+
+JWTs are normally stateless.
+
+Simply removing a token from localStorage does not invalidate a copied token before its expiry.
+
+To improve logout security, ShopZone uses a token blacklist.
+
+The database contains:
+
+```text
+revoked_tokens
+```
+
+The table stores information such as:
+
+```text
+id
+jti
+token_type
+user_id
+revoked_at
+```
+
+Every JWT contains a unique identifier called:
+
+```text
+jti
+```
+
+During logout, ShopZone revokes both the access token and refresh token.
+
+---
+
+# Secure Logout Flow
+
+```text
+User clicks Logout
+        ↓
+Access Token sent to /api/logout
+        ↓
+Access JTI stored in revoked_tokens
+        ↓
+Refresh Token sent to /api/logout/refresh
+        ↓
+Refresh JTI stored in revoked_tokens
+        ↓
+Access Token removed from localStorage
+        ↓
+Refresh Token removed from localStorage
+        ↓
+React user state cleared
+        ↓
+User redirected to Login
+```
+
+After logout:
+
+```text
+Old Access Token
+      ↓
+Blacklist check
+      ↓
+401 Unauthorized
+```
+
+And:
+
+```text
+Old Refresh Token
+      ↓
+Blacklist check
+      ↓
+401 Unauthorized
+```
+
+Therefore, the revoked refresh token cannot be used to generate another access token.
+
+---
+
+# JWT Blacklist Check
+
+Before accepting a protected JWT, Flask checks its JTI against the `revoked_tokens` table.
+
+Conceptually:
+
+```text
+Incoming JWT
+    ↓
+Read JTI
+    ↓
+Search revoked_tokens
+    ↓
+JTI exists?
+   /      \
+ YES       NO
+  ↓         ↓
+401       Continue
+```
+
+---
+
+# JWT Expiry Countdown
+
+ShopZone also displays the remaining lifetime of the current access token.
+
+Example:
+
+```text
+Session
+14:59
+```
+
+The timer decreases every second:
+
+```text
+14:59
+14:58
+14:57
+14:56
+...
+```
+
+The countdown reads the JWT `exp` claim.
+
+JWT expiration is stored as a Unix timestamp.
+
+The frontend calculates:
+
+```text
+JWT Expiration Time
+        -
+Current Time
+        ↓
+Remaining Session Time
+```
+
+When Axios automatically obtains a new access token, the countdown reads the new token and updates to its new expiry time.
+
+---
+
+# Authentication Context
+
+`AuthContext.jsx` manages:
+
+- Logged-in user
+- Login
+- Logout
+- Authentication restoration
+- Access token storage
+- Refresh token storage
+
+This makes authentication state available throughout the React application.
+
+---
+
+# Role-Based Access
+
+ShopZone supports:
+
+```text
 customer
+admin
+```
 
-The customer credentials work only after registering this account in the application.
+JWT claims contain user information required by the backend for authorization.
 
-These credentials are for local development and demonstration only. Change them before deploying publicly.
+Administrator endpoints verify that the authenticated user has the `admin` role.
 
-Project Structure
+Frontend route protection is also used to improve navigation and user experience.
 
+---
+
+# ProtectedRoute
+
+`ProtectedRoute` allows authenticated users to access customer-protected pages.
+
+Example:
+
+```jsx
+import {
+  Navigate
+} from "react-router-dom";
+
+import {
+  useAuth
+} from "../context/AuthContext";
+
+function ProtectedRoute({
+  children
+}) {
+
+  const {
+    user,
+    loading
+  } = useAuth();
+
+  if (loading) {
+    return <p>Loading...</p>;
+  }
+
+  if (!user) {
+
+    return (
+      <Navigate
+        to="/login"
+        replace
+      />
+    );
+  }
+
+  return children;
+}
+
+export default ProtectedRoute;
+```
+
+Example protected pages:
+
+- Checkout
+- My Orders
+
+---
+
+# AdminRoute
+
+`AdminRoute` requires:
+
+1. User must be logged in.
+2. User must have the `admin` role.
+
+```jsx
+import {
+  Navigate
+} from "react-router-dom";
+
+import {
+  useAuth
+} from "../context/AuthContext";
+
+function AdminRoute({
+  children
+}) {
+
+  const {
+    user,
+    loading
+  } = useAuth();
+
+  if (loading) {
+    return <p>Loading...</p>;
+  }
+
+  if (!user) {
+
+    return (
+      <Navigate
+        to="/login"
+        replace
+      />
+    );
+  }
+
+  if (user.role !== "admin") {
+
+    return (
+      <Navigate
+        to="/"
+        replace
+      />
+    );
+  }
+
+  return children;
+}
+
+export default AdminRoute;
+```
+
+Example admin pages:
+
+- Admin Products
+- Add Product
+- Edit Product
+- Admin Orders
+
+Frontend route protection improves the user experience, while the Flask backend performs the actual JWT and role validation for protected API operations.
+
+---
+
+# Customer Features
+
+- Customer registration
+- JWT login
+- Secure logout
+- Access and refresh tokens
+- Automatic token refresh
+- Persistent authentication after page refresh
+- JWT expiry countdown
+- Browse products
+- Product images
+- Search products
+- Category filtering
+- Price sorting
+- Product detail page
+- Quantity selection
+- Add to cart
+- Update cart quantity
+- Remove cart items
+- Cart persistence
+- Protected checkout
+- Place orders
+- View order history
+- View order status
+- Responsive interface
+
+---
+
+# Administrator Features
+
+- JWT-protected administrator access
+- Role-based authorization
+- View all products
+- Product image thumbnails
+- Add products
+- Edit products
+- Delete products
+- Upload product images
+- Product image preview
+- Stock management
+- In Stock badge
+- Low Stock badge
+- Out of Stock badge
+- View customer orders
+- View delivery information
+- Filter orders by status
+- Update order status
+- Responsive admin interface
+
+---
+
+# Product Image Upload
+
+Supported image types:
+
+```text
+PNG
+JPG
+JPEG
+WEBP
+```
+
+Maximum image size:
+
+```text
+5 MB
+```
+
+Image upload flow:
+
+```text
+Admin selects image
+        ↓
+React creates FormData
+        ↓
+multipart/form-data request
+        ↓
+Flask validates image
+        ↓
+Unique filename generated
+        ↓
+Image saved in backend/uploads
+        ↓
+Public image URL returned
+        ↓
+Product information saved
+        ↓
+image_url stored in MySQL
+```
+
+---
+
+# Cart Management
+
+Cart state is managed globally using React Context API.
+
+`CartContext` provides:
+
+```text
+cartItems
+addToCart
+removeFromCart
+updateQuantity
+clearCart
+cartCount
+```
+
+Cart data is also stored in browser localStorage so the cart remains available after refreshing the page.
+
+---
+
+# Why Use React Context API?
+
+React Context API allows shared data to be available to multiple components without passing props through every intermediate component.
+
+Without Context API:
+
+```text
+App
+ ↓
+Home
+ ↓
+Product
+ ↓
+Cart
+```
+
+Data may need to be passed repeatedly using props.
+
+This is called:
+
+```text
+Prop Drilling
+```
+
+With Context API:
+
+```text
+CartContext
+   ↓
+ ┌─┼────────────┐
+ ↓ ↓            ↓
+Home Navbar    Cart
+```
+
+Each component can directly access the current cart state.
+
+---
+
+# Why Does order_items Store unit_price?
+
+The `unit_price` stores the product price at the exact time the order was placed.
+
+Example:
+
+```text
+Customer purchases product = ₹799
+
+Later admin changes price = ₹999
+
+Old order should remain = ₹799
+```
+
+Therefore, the historical price is stored in:
+
+```text
+order_items.unit_price
+```
+
+instead of using the product's current price.
+
+---
+
+# Stock Validation
+
+The backend validates stock before creating an order.
+
+Example:
+
+```text
+Available stock = 3
+
+Customer requests = 10
+```
+
+Backend checks:
+
+```python
+if product["stock"] < quantity:
+
+    return jsonify({
+        "success": False,
+        "message":
+            f"Insufficient stock for "
+            f"{product['name']}. "
+            f"Available stock: "
+            f"{product['stock']}"
+    }), 400
+```
+
+Because:
+
+```text
+3 < 10 = True
+```
+
+the order is rejected.
+
+The order is created only after all requested products pass validation.
+
+---
+
+# Important API Endpoints
+
+## Public
+
+```text
+POST  /api/register
+POST  /api/login
+
+GET   /api/categories
+GET   /api/products
+GET   /api/products/:id
+```
+
+## JWT Authentication
+
+```text
+GET   /api/me
+POST  /api/refresh
+POST  /api/logout
+POST  /api/logout/refresh
+```
+
+## Customer Protected
+
+```text
+POST  /api/orders
+GET   /api/orders/my
+```
+
+## Administrator Protected
+
+```text
+POST    /api/products
+PUT     /api/products/:id
+DELETE  /api/products/:id
+
+POST    /api/upload/product-image
+
+GET     /api/orders
+PUT     /api/orders/:id/status
+```
+
+---
+
+# Project Structure
+
+```text
 ecommerce-app/
+│
 ├── backend/
 │   ├── app.py
 │   ├── config.py
@@ -149,15 +816,19 @@ ecommerce-app/
     │   ├── components/
     │   │   ├── AdminRoute.jsx
     │   │   ├── Navbar.jsx
-    │   │   └── ProtectedRoute.jsx
+    │   │   ├── ProtectedRoute.jsx
+    │   │   └── TokenExpiryCountdown.jsx
+    │   │
     │   ├── context/
     │   │   ├── AuthContext.jsx
     │   │   └── CartContext.jsx
+    │   │
     │   ├── pages/
     │   │   ├── admin/
     │   │   │   ├── AdminOrders.jsx
     │   │   │   ├── AdminProducts.jsx
     │   │   │   └── ProductForm.jsx
+    │   │   │
     │   │   ├── Cart.jsx
     │   │   ├── Checkout.jsx
     │   │   ├── Home.jsx
@@ -165,430 +836,607 @@ ecommerce-app/
     │   │   ├── Orders.jsx
     │   │   ├── ProductDetail.jsx
     │   │   └── Register.jsx
+    │   │
     │   ├── api.js
     │   ├── App.jsx
     │   ├── index.css
     │   └── main.jsx
+    │
     └── package.json
+```
 
-Local Setup
+---
 
-1. Prerequisites
+# Local Setup
+
+## 1. Requirements
 
 Install:
 
-Python 3
+- Python 3
+- Node.js
+- npm
+- MySQL Server
+- MySQL Workbench
+- VS Code
 
-Node.js and npm
+---
 
-MySQL Server and MySQL Workbench
+## 2. Create Database
 
-VS Code
-
-2. Create the database
-
-Open MySQL Workbench and run:
-
+```sql
 CREATE DATABASE IF NOT EXISTS ecommerce;
+
 USE ecommerce;
+```
 
-Make sure the required tables are created using the project database script or your existing ShopZone schema.
+Use the existing ShopZone schema to create the required tables.
 
-3. Configure MySQL
-
-Open backend/config.py and update your local MySQL details:
-
-import mysql.connector
-
-
-def get_db():
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="YOUR_MYSQL_PASSWORD",
-        database="ecommerce"
-    )
-
-Do not publish your real database password on GitHub. For production, load it from environment variables.
-
-4. Run the backend
-
-cd backend
-python -m venv venv
-.\venv\Scripts\activate
-pip install Flask flask-cors flask-bcrypt mysql-connector-python Werkzeug
-python seed.py
-python app.py
-
-Backend URL:
-
-http://localhost:5000
-
-Health check:
-
-http://localhost:5000/api/health
-
-5. Run the frontend
-
-Open a second terminal:
-
-cd frontend
-npm install
-npm run dev
-
-Frontend URL:
-
-http://localhost:5173
-
-Important API Endpoints
-
-Method
-
-Endpoint
-
-Purpose
-
-Access
-
-POST
-
-/api/register
-
-Register a customer
-
-Public
-
-POST
-
-/api/login
-
-Log in
-
-Public
-
-GET
-
-/api/logout
-
-Log out
-
-Logged-in user
-
-GET
-
-/api/me
-
-Get current user
-
-Logged-in user
-
-GET
-
-/api/categories
-
-Get categories
-
-Public
-
-GET
-
-/api/products
-
-Search/filter products
-
-Public
-
-GET
-
-/api/products/:id
-
-Get one product
-
-Public
-
-POST
-
-/api/products
-
-Add a product
-
-Admin
-
-PUT
-
-/api/products/:id
-
-Update a product
-
-Admin
-
-DELETE
-
-/api/products/:id
-
-Delete a product
-
-Admin
-
-POST
-
-/api/upload/product-image
-
-Upload product image
-
-Admin
-
-POST
-
-/api/orders
-
-Place an order
-
-Customer
-
-GET
-
-/api/orders/my
-
-Get customer orders
-
-Customer
-
-GET
-
-/api/orders
-
-Get every order
-
-Admin
-
-PUT
-
-/api/orders/:id/status
-
-Update order status
-
-Admin
-
-Product Image Upload Flow
-
-Admin selects image
-        ↓
-React sends multipart FormData
-        ↓
-Flask validates and saves it in backend/uploads
-        ↓
-Flask returns a public image URL
-        ↓
-React sends product information with image_url
-        ↓
-MySQL stores the URL in products.image_url
-
-Mentor Write-Up
-
-1. What is React Context API, and why is it better than prop drilling for the cart?
-
-React Context API allows shared data and functions to be made available to many components without manually passing them through every intermediate component.
-
-Without Context API, the cart state would need to be passed from App to Navbar, Home, ProductDetail, Cart and Checkout through props. Components that do not use the cart might still have to forward those props. This is called prop drilling.
-
-ShopZone keeps the cart inside CartContext. The provider exposes the cart and its actions:
-
-<CartContext.Provider
-  value={{
-    cartItems,
-    addToCart,
-    removeFromCart,
-    updateQuantity,
-    clearCart,
-    cartCount,
-  }}
->
-  {children}
-</CartContext.Provider>
-
-For example, Home.jsx directly gets addToCart:
-
-const { addToCart } = useCart();
-
-addToCart(product, 1);
-
-Navbar.jsx independently gets cartCount:
-
-const { cartCount } = useCart();
-
-Therefore, Home does not have to pass the cart through App and Navbar. All components receive the same current cart state directly from the provider.
-
-2. Why does order_items store unit_price instead of reading the current product price when displaying an order?
-
-unit_price stores the product price at the exact time the customer placed the order. Product prices can change later, but an old invoice or order history must retain its original amount.
+For JWT logout blacklisting, the project also requires the `revoked_tokens` table.
 
 Example:
 
-Customer orders a mouse for ₹799
-Later the administrator changes its price to ₹999
-The old order must still display ₹799
+```sql
+CREATE TABLE revoked_tokens (
 
-During checkout, the backend reads the trusted product price from MySQL and saves it in the validated item:
+    id INT AUTO_INCREMENT PRIMARY KEY,
 
-validated_items.append({
-    "product_id": product["id"],
-    "product_name": product["name"],
-    "quantity": quantity,
-    "unit_price": product["price"]
-})
+    jti VARCHAR(255)
+        NOT NULL
+        UNIQUE,
 
-It then inserts this historical price into order_items:
+    token_type VARCHAR(20)
+        NOT NULL,
 
-cursor.execute(
-    """
-    INSERT INTO order_items
-    (order_id, product_id, quantity, unit_price)
-    VALUES (%s, %s, %s, %s)
-    """,
-    (
-        order_id,
-        item["product_id"],
-        item["quantity"],
-        item["unit_price"]
-    )
-)
+    user_id INT
+        NOT NULL,
 
-This protects order history from later product-price changes and makes totals reliable.
+    revoked_at TIMESTAMP
+        DEFAULT CURRENT_TIMESTAMP,
 
-3. What happens if a customer orders 10 units when only 3 are in stock?
+    INDEX idx_revoked_jti (jti)
+);
+```
 
-The backend rejects the complete order with HTTP status 400. It returns an insufficient-stock message, does not create the order, and does not reduce any stock.
+---
 
-Exact validation from app.py:
+# Run Backend
 
-# Check stock
-if product["stock"] < quantity:
+Open terminal:
 
-    return jsonify({
-        "success": False,
-        "message":
-            f"Insufficient stock for {product['name']}. "
-            f"Available stock: {product['stock']}"
-    }), 400
+```powershell
+cd backend
+```
 
-For 10 requested units and 3 available units, the condition is:
+Create virtual environment:
 
-3 < 10 → True
+```powershell
+python -m venv venv
+```
 
-The response will be similar to:
+Activate:
 
-{
-  "success": false,
-  "message": "Insufficient stock for Wireless Mouse. Available stock: 3"
-}
+```powershell
+.\venv\Scripts\Activate.ps1
+```
 
-All products are validated before the order is inserted. Only after every item passes validation does the backend create the order and reduce stock.
+Install dependencies:
 
-4. What is the difference between ProtectedRoute and AdminRoute?
+```powershell
+pip install Flask flask-cors flask-bcrypt flask-jwt-extended mysql-connector-python Werkzeug
+```
 
-ProtectedRoute allows any authenticated user. It is used for customer pages such as Checkout and My Orders.
+Run:
 
-import { Navigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+```powershell
+python app.py
+```
 
-function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
+Backend:
 
-  if (loading) {
-    return <p>Loading...</p>;
-  }
+```text
+http://localhost:5000
+```
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
+---
 
-  return children;
-}
+# Run Frontend
 
-export default ProtectedRoute;
+Open another terminal:
 
-AdminRoute first checks login and then checks whether the authenticated user has the admin role. A logged-in customer is redirected to the Home page.
+```powershell
+cd frontend
+```
 
-import { Navigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+Install packages:
 
-function AdminRoute({ children }) {
-  const { user, loading } = useAuth();
+```powershell
+npm install
+```
 
-  if (loading) {
-    return <p>Loading...</p>;
-  }
+Start Vite:
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
+```powershell
+npm run dev
+```
 
-  if (user.role !== "admin") {
-    return <Navigate to="/" replace />;
-  }
+Frontend:
 
-  return children;
-}
+```text
+http://localhost:5173
+```
 
-export default AdminRoute;
+---
 
-Route component
+# JWT Testing
 
-Login required
+## Test 1 — Login
 
-Admin role required
+```text
+POST /api/login
+```
 
-Example pages
+Expected:
 
-ProtectedRoute
+```text
+200 OK
+access_token
+refresh_token
+user
+```
 
-Yes
+---
 
-No
+## Test 2 — Protected Route Without Token
 
-Checkout, My Orders
+```text
+GET /api/me
+```
 
-AdminRoute
+without Authorization header.
 
-Yes
+Expected:
 
-Yes
+```text
+401 Unauthorized
+```
 
-Admin Products, Product Form, Admin Orders
+---
 
-Frontend route protection improves the user experience, but the Flask backend also checks the session and administrator role before performing protected database operations.
+## Test 3 — Protected Route With Access Token
 
-Security Notes
+```text
+GET /api/me
 
-Passwords are hashed using Flask-Bcrypt.
+Authorization:
+Bearer ACCESS_TOKEN
+```
 
-SQL queries use parameterized placeholders to prevent SQL injection.
+Expected:
 
-Flask sessions track authenticated users.
+```text
+200 OK
+```
 
-Customer and administrator access are separated.
+---
 
-Product-image extensions and sizes are validated.
+## Test 4 — Refresh Access Token
 
-Product price and stock are checked using trusted database values during checkout.
+```text
+POST /api/refresh
 
-Database passwords and Flask secret keys should be loaded from environment variables before production deployment.
+Authorization:
+Bearer REFRESH_TOKEN
+```
 
-Future Improvements
+Expected:
 
-Payment gateway integration
+```text
+200 OK
 
-Cloud product-image storage
+New access_token
+```
 
-Email order confirmations
+---
 
-Product reviews and ratings
+## Test 5 — Page Refresh Persistence
 
-Wishlist support
+1. Login.
+2. Refresh the browser using F5.
+3. User remains authenticated.
+4. `/api/me` restores the current user.
 
-Pagination
+---
 
-Environment-based configuration
+## Test 6 — Automatic Refresh
 
-Automated backend and frontend tests
+For testing, temporarily reduce access-token expiry.
+
+Wait until the access token expires.
+
+Make a protected request.
+
+Expected flow:
+
+```text
+Protected request
+      ↓
+401
+      ↓
+Axios interceptor
+      ↓
+/api/refresh
+      ↓
+200
+      ↓
+New access token
+      ↓
+Original request retried
+      ↓
+200
+```
+
+Restore the normal access-token expiry after testing.
+
+---
+
+## Test 7 — Token Blacklist
+
+Login and copy the access and refresh tokens.
+
+Logout.
+
+Check MySQL:
+
+```sql
+SELECT
+    id,
+    token_type,
+    user_id,
+    revoked_at
+FROM revoked_tokens
+ORDER BY id DESC;
+```
+
+The logout should create entries for:
+
+```text
+access
+refresh
+```
+
+Using either revoked token again should fail authentication.
+
+---
+
+# Task 16 Mentor Write-Up
+
+## 1. What is the difference between an access token and a refresh token?
+
+An access token is a short-lived JWT used to access protected API endpoints.
+
+Example:
+
+```text
+GET /api/me
+Authorization: Bearer ACCESS_TOKEN
+```
+
+In ShopZone, the access token expires after 15 minutes.
+
+A refresh token lasts longer and is used only to request a new access token.
+
+Example:
+
+```text
+POST /api/refresh
+Authorization: Bearer REFRESH_TOKEN
+```
+
+ShopZone uses a 7-day refresh-token lifetime.
+
+Using a short-lived access token limits how long that token can be used if it is exposed.
+
+---
+
+## 2. How does the Axios interceptor work?
+
+ShopZone uses two Axios interceptors.
+
+### Request Interceptor
+
+Before a protected request is sent, Axios reads:
+
+```text
+access_token
+```
+
+from localStorage.
+
+It automatically adds:
+
+```text
+Authorization: Bearer ACCESS_TOKEN
+```
+
+to the request.
+
+### Response Interceptor
+
+If the backend returns:
+
+```text
+401 Unauthorized
+```
+
+because the access token has expired, the interceptor uses the refresh token.
+
+It calls:
+
+```text
+POST /api/refresh
+```
+
+If successful:
+
+1. A new access token is received.
+2. The new token replaces the old token in localStorage.
+3. The original request is retried.
+
+This allows the user to continue using the application without manually logging in again after every access-token expiry.
+
+---
+
+## 3. What happens when the access token expires?
+
+```text
+Access Token Expires
+        ↓
+Protected Request
+        ↓
+Backend returns 401
+        ↓
+Axios catches 401
+        ↓
+Refresh Token sent
+        ↓
+Flask validates Refresh Token
+        ↓
+New Access Token generated
+        ↓
+React saves New Access Token
+        ↓
+Original request retried
+        ↓
+Request succeeds
+```
+
+The JWT countdown also detects the newly stored access token and updates to the new expiry time.
+
+---
+
+## 4. JWT vs Flask Session Authentication
+
+### Previous Flask Session Approach
+
+The earlier ShopZone version used Flask sessions to track authenticated users.
+
+The browser sent a session cookie with requests, and Flask used the session to identify the current user.
+
+### Current JWT Approach
+
+Task 16 uses access and refresh JWTs.
+
+The frontend sends:
+
+```text
+Authorization: Bearer TOKEN
+```
+
+with protected API requests.
+
+JWT authentication fits an API-based React frontend because authentication information can be sent explicitly in the Authorization header.
+
+JWT also introduces additional responsibilities such as:
+
+- Secure token storage
+- Token expiration
+- Refresh-token handling
+- Logout revocation
+- Protection against token theft
+
+Therefore, JWT is not automatically more secure than session authentication. Its security depends on the implementation.
+
+---
+
+# Security Features
+
+ShopZone currently includes:
+
+- Password hashing using Flask-Bcrypt
+- JWT access tokens
+- JWT refresh tokens
+- Short-lived access tokens
+- Protected Flask endpoints
+- Role-based administrator authorization
+- Automatic access-token refresh
+- Access-token blacklisting
+- Refresh-token blacklisting
+- JTI-based token revocation
+- Parameterized SQL queries
+- Product stock validation
+- Trusted server-side product pricing
+- Image extension validation
+- Image-size validation
+- Frontend route protection
+
+---
+
+# Security Notes
+
+JWT tokens are currently stored in browser localStorage for this learning project.
+
+This is convenient for demonstrating JWT authentication, but localStorage tokens can be exposed if an application has a successful Cross-Site Scripting (XSS) attack.
+
+For a production application, token storage and authentication architecture should be chosen based on the application's security requirements. Secure HttpOnly cookies are another common approach.
+
+Secrets and database passwords should not be committed to a public GitHub repository.
+
+---
+
+# UI Design
+
+ShopZone includes a responsive shopping-style interface with:
+
+- Peach and cream visual theme
+- Responsive navigation
+- Product cards
+- Search controls
+- Category filtering
+- Cart interface
+- Checkout interface
+- Customer order history
+- Admin product management
+- Admin order management
+- Loading states
+- Hover effects
+- Responsive mobile layouts
+- JWT session countdown
+
+---
+
+# Hardest Part
+
+The most challenging part of Task 16 was connecting JWT authentication across the React frontend and Flask backend.
+
+The application needed to correctly handle:
+
+```text
+Login
+↓
+Token storage
+↓
+Authorization header
+↓
+Protected backend route
+↓
+Access-token expiry
+↓
+Automatic refresh
+↓
+Original request retry
+↓
+Logout
+↓
+Token revocation
+```
+
+A particularly important part was ensuring that the access token and refresh token were used for the correct endpoints.
+
+For example:
+
+```text
+/api/me
+→ Access Token
+
+/api/refresh
+→ Refresh Token
+
+/api/logout
+→ Access Token
+
+/api/logout/refresh
+→ Refresh Token
+```
+
+The issue was solved by testing each API separately, checking Authorization headers in the browser Network panel and Postman, and verifying revoked JWT JTIs in MySQL.
+
+---
+
+# What I Learned
+
+Through this project I learned:
+
+- How JWT authentication works
+- Difference between access and refresh tokens
+- How to protect Flask API routes
+- How to use JWT claims
+- How to implement role-based authorization
+- How Axios interceptors work
+- How to automatically refresh an expired access token
+- How to retry an API request
+- How to restore authentication after browser refresh
+- How JWT logout differs from session logout
+- How JTI token blacklisting works
+- How to revoke access and refresh tokens
+- How to decode JWT expiry information
+- How to display a live token-expiry countdown
+- How React and Flask authentication work together
+
+---
+
+# Final Result
+
+The completed ShopZone project demonstrates a full React + Flask + MySQL e-commerce workflow with JWT authentication.
+
+The application now supports:
+
+```text
+Registration
+      ↓
+JWT Login
+      ↓
+Access + Refresh Tokens
+      ↓
+Protected Routes
+      ↓
+Product Browsing
+      ↓
+Cart
+      ↓
+Checkout
+      ↓
+Order Placement
+      ↓
+Order History
+
+Admin Login
+      ↓
+Role Verification
+      ↓
+Product Management
+      ↓
+Image Upload
+      ↓
+Stock Management
+      ↓
+Order Management
+```
+
+Authentication additionally supports:
+
+```text
+JWT Login
+   ↓
+Automatic Authorization Header
+   ↓
+Access Token Expiry
+   ↓
+Automatic Refresh
+   ↓
+Session Countdown
+   ↓
+Secure Logout
+   ↓
+Access + Refresh Token Blacklisting
+```
+
+---
+
+# Author
+
+**Hariharan B**
+
+Full-Stack E-Commerce Project  
+React + Flask + MySQL  
+Task 16 — JWT Authentication Upgrade
